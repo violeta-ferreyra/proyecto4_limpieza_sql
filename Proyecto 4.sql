@@ -123,3 +123,77 @@ ON replace(nombre_del_articulo,'dashborads','dashboards') = dim.nombre_producto;
 
 SELECT * FROM learndata_proyecto.fac_pedidos;
 
+CREATE TABLE learndata_proyecto.fac_pagos_stripe (
+pk_idtransaccion VARCHAR (50),
+fecha_pago timestamp,
+id_pedido int,
+moneda VARCHAR (3),
+importe_pago decimal (10,2),
+comision_pago decimal (10,2),
+neto_pago decimal (10,2),
+tipo_pago VARCHAR (50),
+primary key (pk_idtransaccion)
+);
+#Creamos una consulta con los datos que queremos insertar.
+INSERT INTO learndata_proyecto.fac_pagos_stripe
+SELECT 
+id,
+str_to_date(created, '%Y-%m-%dT %H:%i:%sZ') as  fecha_pago,
+RIGHT(description, 5) as id_pedido,
+currency,
+amount,
+CAST(replace(fee,',', '.') as decimal (10,2)) as comision_pago,
+CAST(replace(net,',','.') as decimal (10,2)) as neto_pago,
+`type` as tipo
+ FROM learndata_crudo.raw_pagos_stripe;
+
+-- Agregamos el 'id_cliente' como primary key que es unmpaos que nos falto.
+
+ALTER TABLE learndata_proyecto.dim_clientes 
+ADD primary key ( pk_idcliente);
+
+-- Ahora como paso extra y mejorar nuestro trabajo dejamos algunos resultados que pueden ser de interes para los departamentos.
+# 1- Productos que generan mas ingresos:
+SELECT
+nombre_producto,
+SUM(cantidad_producto) AS total_vendido,
+SUM(coste_producto) AS total_facturado
+FROM learndata_proyecto.fac_pedidos
+GROUP BY nombre_producto
+ORDER BY total_facturado desc;
+
+# 2- Clientes más valiosos.
+SELECT c.nombre_cliente,
+count(pe.pkid_pedido) as total_pedidos,
+sum(pe.venta_total) as total_vendido
+FROM learndata_proyecto.dim_clientes c 
+LEFT JOIN learndata_proyecto.fac_pedidos pe
+ON c.pk_idcliente = pe.id_cliente
+GROUP BY nombre_cliente
+order by total_vendido desc
+limit 5;
+
+# 3- Total de ventas mensuales.
+-- Opcion 1 vemos los meses mas fuertes
+SELECT month(fecha_pedido) as mes,
+sum(venta_total) as total_venta
+FROM learndata_proyecto.fac_pedidos
+group by mes
+order by total_venta desc;
+-- Opcion 2 vemos los meses pero por año.
+SELECT date_format(fecha_pedido, '%Y-%m') as mes,
+sum(venta_total) as total_venta
+FROM learndata_proyecto.fac_pedidos
+group by mes
+order by total_venta desc;
+
+# 4- Metodo de pago más utilizado.
+SELECT metodo_pago, 
+count(*) as tipo_pago
+FROM learndata_proyecto.fac_pedidos
+group by metodo_pago
+order by tipo_pago;
+
+ 
+
+
